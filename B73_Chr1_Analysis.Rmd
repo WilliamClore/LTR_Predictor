@@ -1,0 +1,143 @@
+---
+title: "B73v4 Output"
+output: html_notebook
+---
+
+```{r}
+#load in libraries
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(stringr)
+```
+
+```{r}
+blank_theme <- theme_light()+
+  theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.border = element_blank(),
+  panel.grid=element_blank(),
+  axis.ticks = element_blank(),
+  plot.title=element_text(size=14, face="bold")
+  )
+
+#color blind friendly color pallettes
+cbbPalette <- c("#D81B60", "#1E88E5", "#FFC107", "#004D40", "#D9CD2F", "#56AB18", "#A66339", "#851B86")
+
+cbbPalette2 <- c("#D81B60", "#1E88E5", "#FFC107", "#004D40", "#D9CD2F", "#56AB18")
+
+cbbPalette3 <- c("#D81B60", "#1E88E5", "#FFC107", "#004D40", "#D9CD2F")
+
+cbbPalette4 <- c("#D81B60", "#1E88E5", "#FFC107", "#004D40")
+```
+
+```{r}
+#load in chr1 output data table
+Output_TE <- read.delim('B73v4_Chr1_Output', sep="\t",header=TRUE, dec = ".")
+#file contains information on what TEs have other TEs nested within them
+Nested_TE <- read.delim("B73_nested_filteredTE_20Dec18.txt", sep = "\t", header = TRUE, dec = ".")
+
+
+Output_TE <- Output_TE %>%
+  mutate(
+    TE_Type = case_when(
+      str_detect(Sequence, "01dS") & str_detect(Sequence, "ID=RL") ~ "SoloLTR",
+      str_detect(Sequence, "ID=RL") & str_detect(Sequence, "01d") ~ "LTR",
+      str_detect(Sequence, "ID=RI") ~ "LINE",
+      str_detect(Sequence, "ID=RS") ~ "SINE",
+      str_detect(Sequence, "ID=DT") ~ "TIR",
+      str_detect(Sequence, "ID=DH") ~ "Helitron"))
+Output_TE <- Output_TE %>%
+  mutate(
+    LTR_Candidacy = case_when(
+      str_detect(Pass_Fail_Condition, "LTR_Candidate") ~ "LTR Candidate",
+      str_detect(Pass_Fail_Condition, "Simple_Sequence") ~ "Not an LTR",
+      str_detect(Pass_Fail_Condition, "Global_Failure") ~ "Not an LTR",
+      str_detect(Pass_Fail_Condition, "LTR_base_min") ~ "Not an LTR",
+      str_detect(Pass_Fail_Condition, "Local_Failure") ~ "Not an LTR",
+      str_detect(Pass_Fail_Condition, "Too_Short") ~ "Not an LTR"))
+
+Output_TE <- Output_TE %>%
+	mutate(
+		Test_Result = case_when(
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'LTR') ~ "TRUE Positive",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'LTR') ~ "FALSE Negative",
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'TIR') ~ "FALSE Positive",
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'SINE') ~ "FALSE Positive",
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'LINE') ~ "FALSE Positive",
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'Helitron') ~ "FALSE Positive",
+			(LTR_Candidacy == 'LTR Candidate' & TE_Type == 'SoloLTR') ~ "FALSE Positive",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'TIR') ~ "TRUE Negative",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'SINE') ~ "TRUE Negative",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'LINE') ~ "TRUE Negative",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'Helitron') ~ "TRUE Negative",
+			(LTR_Candidacy == 'Not an LTR' & TE_Type == 'SoloLTR') ~ "TRUE Negative"))
+
+#Simplifies Sequence names in Sequence Column
+Output_TE$Sequence <- gsub("ID=", "", Output_TE$Sequence)
+Output_TE$Sequence <- gsub(";Name.*", "", Output_TE$Sequence)
+
+#Sequences are either TRUE or FALSE for having a TE nested within the sequence. If they are true for having a TE nested within, they are a Nested_Host
+Sequence <- table(Nested_TE$nested_within)
+Output_TE$Nested_Host <- Output_TE$Sequence %in% Nested_TE$nested_within
+
+TE_Coords_Chr1 <- filter(TE_Coords, V1==1)
+Output_TE$Chr1 <- Output_TE$Sequence %in% TE_Coords_Chr1$V4
+
+Chromosome_One <- filter(Output_TE, Chr1 == TRUE)
+Chromosome_One <- filter(Output_TE, TE_Type != "SoloLTR")
+```
+
+```{r}
+Frequency_Table <- Chromosome_One %>% group_by(TE_Type, Pass_Fail_Condition) %>% dplyr::summarise(Freq=n())
+Frequency_Table
+rbind(data.frame(TE_Type = "LTR", Pass_Fail_Condition = "LTR_base_min", Freq = "0"), Frequency_Table)
+LTR_Pass_Fail <- filter(Frequency_Table, TE_Type == "LTR")
+TIR_Pass_Fail <- filter(Frequency_Table, TE_Type == "TIR")
+
+
+TIR_Pass_Fail_Bar <- ggplot(TIR_Pass_Fail, aes(Pass_Fail_Condition, y=Freq)) +geom_bar(stat="identity", fill=cbbPalette3) + coord_flip()+theme_light()+labs(x ="LTR Predictor Conditions Met", y = "Frequency") + ggtitle("B73v4 TIR Pass and Fail Conditions")
+TIR_Pass_Fail_Bar
+#ggsave("TIR_Pass_Fail.png")
+
+LTR_Pass_Fail_Bar <- ggplot(LTR_Pass_Fail, aes(Pass_Fail_Condition, y=Freq)) +geom_bar(stat="identity", fill=cbbPalette4) + coord_flip()+theme_light()+labs(x ="LTR Predictor Conditions Met", y = "Frequency") + ggtitle("B73v4 LTR Pass and Fail Conditions")
+LTR_Pass_Fail_Bar
+#ggsave("LTR_Pass_Fail.png")
+
+#This just Shrinks the dataframe to the TEs most represented within the Maize genomes, LTRs, TIRs and Helitrons
+Reduced_TE_Data <- filter(Chromosome_One, TE_Type == "LTR" | TE_Type == "TIR" | TE_Type == "Helitron")
+
+TIR_DATA <- filter(Reduced_TE_Data, TE_Type == "TIR")
+
+LTR_Candidacy <- ggplot(data=Reduced_TE_Data, aes(x = TE_Type,fill = LTR_Candidacy)) + geom_bar()+ scale_fill_manual(values = cbbPalette2) + coord_flip() + theme_light()
+LTR_Candidacy
+#ggsave("B73_LTR_Candidacy.png")
+
+Frequency_Table <- Reduced_TE_Data %>% group_by(TE_Type, LTR_Candidacy, ) %>% dplyr::summarise(Freq=n())
+
+
+
+LTRFreq <- filter(Frequency_Table, TE_Type == "LTR")
+TIRFreq <- filter(Frequency_Table, TE_Type == "TIR")
+
+
+LTR_Pie <- ggplot(LTRFreq, aes(x="",y=Freq, fill=LTR_Candidacy))+geom_bar(width = 1, stat = "identity")+coord_polar("y", start = 0)+blank_theme+theme(axis.text.x=element_blank()) + geom_text(aes(label = paste(round(Freq / sum(Freq) * 100, 1), "%")), position = position_stack(vjust = 0.5)) + labs(title = "LTR Candidacy of LTRs")+ scale_fill_manual(values = cbbPalette2)
+LTR_Pie
+#ggsave("B73_LTR_Piechart.png")
+
+TIR_Pie <- ggplot(TIRFreq, aes(x="",y=Freq, fill=LTR_Candidacy))+geom_bar(width = 1, stat = "identity")+coord_polar("y", start = 0)+blank_theme+theme(axis.text.x=element_blank()) + geom_text(aes(label = paste(round(Freq / sum(Freq) * 100, 1), "%")), position = position_stack(vjust = 0.5)) + labs(title = "LTR Candidacy of TIRs")+ scale_fill_manual(values = cbbPalette2)
+TIR_Pie
+#ggsave("B73_TIR_Piechart.png")
+
+Freq_Table_PassFail <- Reduced_TE_Data %>% group_by(Test_Result, Nested_Host) %>% dplyr::summarise(Freq=n())
+Freq_Table_PassFail
+False_Negatives_Freq <- filter(Freq_Table_PassFail, Test_Result == "FALSE Negative")
+False_Negatives_Freq
+
+False_Negatives <- ggplot(False_Negatives_Freq, aes(x="",y=Freq, fill=Nested_Host))+geom_bar(width = 1, stat = "identity")+coord_polar("y", start = 0)+blank_theme+theme(axis.text.x=element_blank()) + geom_text(aes(label = paste(round(Freq / sum(Freq) * 100, 1), "%")), position = position_stack(vjust = 0.5)) + labs(title = "False Negatives with TEs Inserted") + scale_fill_manual(values = cbbPalette2)
+False_Negatives
+#ggsave("False_Negatives_B73.png")
+```
+
+
