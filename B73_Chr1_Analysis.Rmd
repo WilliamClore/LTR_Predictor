@@ -82,11 +82,9 @@ Output_TE$Sequence <- gsub(";Name.*", "", Output_TE$Sequence)
 Sequence <- table(Nested_TE$nested_within)
 Output_TE$Nested_Host <- Output_TE$Sequence %in% Nested_TE$nested_within
 
-TE_Coords_Chr1 <- filter(TE_Coords, V1==1)
-Output_TE$Chr1 <- Output_TE$Sequence %in% TE_Coords_Chr1$V4
+#This just Shrinks the dataframe to the TEs most represented within the Maize genomes, LTRs, TIRs and Helitrons
+Chromosome_One <- filter(Chromosome_One, TE_Type == "LTR" | TE_Type == "TIR" | TE_Type == "Helitron")
 
-Chromosome_One <- filter(Output_TE, Chr1 == TRUE)
-Chromosome_One <- filter(Output_TE, TE_Type != "SoloLTR")
 ```
 
 ```{r}
@@ -105,16 +103,15 @@ LTR_Pass_Fail_Bar <- ggplot(LTR_Pass_Fail, aes(Pass_Fail_Condition, y=Freq)) +ge
 LTR_Pass_Fail_Bar
 #ggsave("LTR_Pass_Fail.png")
 
-#This just Shrinks the dataframe to the TEs most represented within the Maize genomes, LTRs, TIRs and Helitrons
-Reduced_TE_Data <- filter(Chromosome_One, TE_Type == "LTR" | TE_Type == "TIR" | TE_Type == "Helitron")
 
-TIR_DATA <- filter(Reduced_TE_Data, TE_Type == "TIR")
 
-LTR_Candidacy <- ggplot(data=Reduced_TE_Data, aes(x = TE_Type,fill = LTR_Candidacy)) + geom_bar()+ scale_fill_manual(values = cbbPalette2) + coord_flip() + theme_light()
+TIR_DATA <- filter(Chromosome_One, TE_Type == "TIR")
+
+LTR_Candidacy <- ggplot(data=Chromosome_One, aes(x = TE_Type,fill = LTR_Candidacy)) + geom_bar()+ scale_fill_manual(values = cbbPalette2) + coord_flip() + theme_light()
 LTR_Candidacy
 #ggsave("B73_LTR_Candidacy.png")
 
-Frequency_Table <- Reduced_TE_Data %>% group_by(TE_Type, LTR_Candidacy, ) %>% dplyr::summarise(Freq=n())
+Frequency_Table <- Chromosome_One %>% group_by(TE_Type, LTR_Candidacy, ) %>% dplyr::summarise(Freq=n())
 
 
 
@@ -130,7 +127,7 @@ TIR_Pie <- ggplot(TIRFreq, aes(x="",y=Freq, fill=LTR_Candidacy))+geom_bar(width 
 TIR_Pie
 #ggsave("B73_TIR_Piechart.png")
 
-Freq_Table_PassFail <- Reduced_TE_Data %>% group_by(Test_Result, Nested_Host) %>% dplyr::summarise(Freq=n())
+Freq_Table_PassFail <- Chromosome_One %>% group_by(Test_Result, Nested_Host) %>% dplyr::summarise(Freq=n())
 Freq_Table_PassFail
 False_Negatives_Freq <- filter(Freq_Table_PassFail, Test_Result == "FALSE Negative")
 False_Negatives_Freq
